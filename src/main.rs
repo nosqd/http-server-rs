@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::{
     io::{self, BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
-    vec,
 };
 
 use itertools::Itertools;
@@ -68,11 +67,16 @@ impl HttpStatus {
 
 struct Response {
     status: HttpStatus,
-    headers: Vec<(String, String)>,
+    headers: HashMap<String, String>,
     body: String,
 }
 
 impl Response {
+    fn add_content_headers(&mut self, content_type: &str) {
+        self.headers.insert("Content-Type".to_string(),  content_type.to_string());
+        self.headers.insert("Content-Length".to_string(), self.body.as_bytes().len().to_string());
+    }
+
     fn write(&self, mut stream: &TcpStream) -> io::Result<usize> {
         // Status line
         // HTTP/1.1 200 OK
@@ -108,40 +112,38 @@ fn handle_stream(stream: &TcpStream) {
     let req = read_request(stream).unwrap();
 
     if req.full_url == "/" {
-        let resp = Response {
+        let mut resp = Response {
             body: "Hello, world".to_string(),
             status: HttpStatus::Ok,
-            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            headers: HashMap::new()
         };
+        resp.add_content_headers("text/plain");
         _ = resp.write(stream).unwrap();
     }
     if req.full_url == "/user-agent" {
-        let resp = Response {
+        let mut resp = Response {
             body: req.headers.get("User-Agent").unwrap().to_string(),
             status: HttpStatus::Ok,
-            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            headers: HashMap::new()
         };
+        resp.add_content_headers("text/plain");
         _ = resp.write(stream).unwrap();
     } else if req.full_url.starts_with("/echo/") {
         let data_to_echo = req.url_parts.get(2).unwrap();
-        let resp = Response {
+        let mut resp = Response {
             body: data_to_echo.to_string(),
             status: HttpStatus::Ok,
-            headers: vec![
-                ("Content-Type".to_string(), "text/plain".to_string()),
-                (
-                    "Content-Length".to_string(),
-                    data_to_echo.as_bytes().len().to_string(),
-                ),
-            ],
+            headers: HashMap::new()
         };
+        resp.add_content_headers("text/plain");
         _ = resp.write(stream).unwrap();
     } else {
-        let resp = Response {
+        let mut resp = Response {
             body: "Not Found".to_string(),
             status: HttpStatus::NotFound,
-            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            headers: HashMap::new()
         };
+        resp.add_content_headers("text/plain");
         _ = resp.write(stream).unwrap();
     }
 
