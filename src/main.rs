@@ -1,10 +1,12 @@
+use clap::Parser;
+use itertools::Itertools;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::thread;
 use std::{
     io::{self, BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
 };
-use std::thread;
-use itertools::Itertools;
 
 struct Request {
     full_url: String,
@@ -73,8 +75,12 @@ struct Response {
 
 impl Response {
     fn add_content_headers(&mut self, content_type: &str) {
-        self.headers.insert("Content-Type".to_string(),  content_type.to_string());
-        self.headers.insert("Content-Length".to_string(), self.body.as_bytes().len().to_string());
+        self.headers
+            .insert("Content-Type".to_string(), content_type.to_string());
+        self.headers.insert(
+            "Content-Length".to_string(),
+            self.body.as_bytes().len().to_string(),
+        );
     }
 
     fn write(&self, mut stream: &TcpStream) -> io::Result<usize> {
@@ -108,14 +114,14 @@ impl Response {
     }
 }
 
-fn handle_stream(stream: &TcpStream) {
+fn handle_stream(args: Args, stream: &TcpStream) {
     let req = read_request(stream).unwrap();
 
     if req.full_url == "/" {
         let mut resp = Response {
             body: "Hello, world".to_string(),
             status: HttpStatus::Ok,
-            headers: HashMap::new()
+            headers: HashMap::new(),
         };
         resp.add_content_headers("text/plain");
         _ = resp.write(stream).unwrap();
@@ -124,7 +130,7 @@ fn handle_stream(stream: &TcpStream) {
         let mut resp = Response {
             body: req.headers.get("User-Agent").unwrap().to_string(),
             status: HttpStatus::Ok,
-            headers: HashMap::new()
+            headers: HashMap::new(),
         };
         resp.add_content_headers("text/plain");
         _ = resp.write(stream).unwrap();
@@ -133,15 +139,28 @@ fn handle_stream(stream: &TcpStream) {
         let mut resp = Response {
             body: data_to_echo.to_string(),
             status: HttpStatus::Ok,
-            headers: HashMap::new()
+            headers: HashMap::new(),
         };
         resp.add_content_headers("text/plain");
+        _ = resp.write(stream).unwrap();
+    } else if req.full_url.starts_with("/files/") {
+        let file_path = req.url_parts[2..].to_vec();
+        let mut path: PathBuf = [args.directory].iter().collect();
+        path.extend(file_path.iter().map(|v| v.as_str()));
+    
+        println!("{}", path.as_os_str().to_str().unwrap());
+        let mut resp = Response {
+            body: std::fs::read_to_string(path).unwrap(),
+            status: HttpStatus::Ok,
+            headers: HashMap::new(),
+        };
+        resp.add_content_headers("application/octet-stream");
         _ = resp.write(stream).unwrap();
     } else {
         let mut resp = Response {
             body: "Not Found".to_string(),
             status: HttpStatus::NotFound,
-            headers: HashMap::new()
+            headers: HashMap::new(),
         };
         resp.add_content_headers("text/plain");
         _ = resp.write(stream).unwrap();
@@ -150,14 +169,26 @@ fn handle_stream(stream: &TcpStream) {
     _ = stream.shutdown(std::net::Shutdown::Both).unwrap();
 }
 
+#[derive(Parser, Debug, Clone)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Name of the person to greet
+    #[arg(short, long)]
+    directory: String,
+}
+
 fn main() {
+    let args = Args::parse();
+    println!("running files feature at {}", args.directory);
+
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
     println!("started on ::4221");
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
+                let a = args.clone();
                 thread::spawn(move || {
-                    _ = handle_stream(&stream);
+                    _ = handle_stream(a, &stream);
                 });
             }
             Err(e) => {
