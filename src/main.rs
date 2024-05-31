@@ -74,6 +74,7 @@ enum HttpStatus {
     Ok,
     NotFound,
     InternalServerError,
+    Created
 }
 
 impl HttpStatus {
@@ -82,6 +83,7 @@ impl HttpStatus {
             HttpStatus::Ok => "200 OK",
             HttpStatus::NotFound => "404 Not Found",
             HttpStatus::InternalServerError => "500 Internal Server Error",
+            HttpStatus::Created => "201 Created"
         }
     }
 }
@@ -210,8 +212,8 @@ fn handle_stream(args: Args, stream: &TcpStream) {
                 _ = resp.write(stream).unwrap();
             });
             let mut resp = Response {
-                body: "ok".to_string(),
-                status: HttpStatus::Ok,
+                body: "".to_string(),
+                status: HttpStatus::Created,
                 headers: HashMap::new(),
             };
             resp.add_content_headers("text/plain");
