@@ -147,7 +147,7 @@ fn handle_stream(args: Args, stream: &TcpStream) {
         _ = resp.write(stream).unwrap();
     } else if req.full_url.starts_with("/files/") {
         let file_path = req.url_parts[2..].to_vec();
-        let mut path: PathBuf = [args.directory].iter().collect();
+        let mut path: PathBuf = [args.directory.unwrap_or(".".to_string())].iter().collect();
         path.extend(file_path.iter().map(|v| v.as_str()));
     
         println!("{}", path.as_os_str().to_str().unwrap());
@@ -199,14 +199,12 @@ fn handle_stream(args: Args, stream: &TcpStream) {
 #[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Name of the person to greet
     #[arg(short, long)]
-    directory: String,
+    directory: Option<String>,
 }
 
 fn main() {
     let args = Args::parse();
-    println!("running files feature at {}", args.directory);
 
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
     println!("started on ::4221");
