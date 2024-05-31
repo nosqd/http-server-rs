@@ -3,7 +3,7 @@ use std::{
     io::{self, BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
 };
-
+use std::thread;
 use itertools::Itertools;
 
 struct Request {
@@ -156,7 +156,9 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                _ = handle_stream(&stream);
+                thread::spawn(move || {
+                    _ = handle_stream(&stream);
+                });
             }
             Err(e) => {
                 println!("error: {}", e);
