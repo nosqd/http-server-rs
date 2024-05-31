@@ -1,11 +1,8 @@
 use std::{
-    default, io::{BufRead, BufReader, Read, Write}, net::{TcpListener, TcpStream}, time::Duration
+    io::{BufRead, BufReader, Read, Write}, net::{TcpListener, TcpStream}, vec
 };
 
 fn handle_stream(mut stream: &TcpStream) {
-    // old code
-
-    let mut buffer: Vec<u8> = Vec::new();
     let mut reader = BufReader::new(stream.try_clone().unwrap());
 
     let mut info_part = String::new();
@@ -13,15 +10,35 @@ fn handle_stream(mut stream: &TcpStream) {
     let into_part_parts = Vec::from_iter(info_part.split(" "));
     let _method = into_part_parts.get(0).unwrap().trim_end();
     let url = into_part_parts.get(1).unwrap().trim_end();
-    let _httpVersion = into_part_parts.get(2).unwrap().trim_end();
+    let _http_version = into_part_parts.get(2).unwrap().trim_end();
 
     println!(
-        "[{}] sent {} request to {} url with {} http version",
-        stream.peer_addr().unwrap(),
+        "Recved {} request from {} to {} url with {} http version",
         _method,
+        stream.peer_addr().unwrap(),
         url,
-        _httpVersion
+        _http_version
     );
+
+    let mut headers: Vec<(String, String)> = vec![];
+
+    loop {
+        let mut header = String::new();
+        reader.read_line(&mut header).unwrap();
+        if header == "\r\n" {
+            break;
+        }
+        let header_parts = Vec::from_iter(header.split(": "));
+        headers.push((
+            header_parts[0].trim_end().into(),
+            header_parts[1].trim_end().into()
+        ));
+    }
+
+    println!("Headers:");
+    for header in headers {
+        println!("\t {} = {}", header.0, header.1);
+    }
 
     const STATUS_OK: &str = "HTTP/1.1 200 OK\r\n\r\n";
     const STATUS_NF: &str = "HTTP/1.1 404 Not Found\r\n\r\n";
