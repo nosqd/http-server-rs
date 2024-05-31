@@ -111,7 +111,7 @@ fn handle_stream(stream: &TcpStream) {
         let resp = Response {
             body: "Hello, world".to_string(),
             status: HttpStatus::Ok,
-            headers: vec![],
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
         };
         _ = resp.write(stream).unwrap();
     }
@@ -119,7 +119,7 @@ fn handle_stream(stream: &TcpStream) {
         let resp = Response {
             body: req.headers.get("User-Agent").unwrap().to_string(),
             status: HttpStatus::Ok,
-            headers: vec![],
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
         };
         _ = resp.write(stream).unwrap();
     } else if req.full_url.starts_with("/echo/") {
@@ -140,7 +140,7 @@ fn handle_stream(stream: &TcpStream) {
         let resp = Response {
             body: "Not Found".to_string(),
             status: HttpStatus::NotFound,
-            headers: vec![],
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
         };
         _ = resp.write(stream).unwrap();
     }
