@@ -1,8 +1,9 @@
 use clap::Parser;
 use itertools::Itertools;
 use std::collections::HashMap;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::thread;
+use std::{fs, thread, vec};
 use std::{
     io::{self, BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
@@ -14,6 +15,7 @@ struct Request {
     headers: HashMap<String, String>,
     method: String,
     http_version: String,
+    body: Vec<u8>,
 }
 
 fn read_request(stream: &TcpStream) -> io::Result<Request> {
@@ -42,21 +44,36 @@ fn read_request(stream: &TcpStream) -> io::Result<Request> {
         );
     }
 
-    // todo parse post bodies
-
-    return Ok(Request {
+    // body
+    let mut d = Request {
         full_url: url.to_string(),
         http_version: http_version.to_string(),
         method: method.to_string(),
         url_parts: url_parts.iter().map(|s| s.to_string()).collect_vec(),
-        headers: headers,
-    });
+        headers: headers.clone(),
+        body: vec![],
+    };
+
+    if headers.contains_key("Content-Type") {
+        let length: usize = headers
+            .get("Content-Length")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+        if length != 0 {
+            let mut body: Vec<u8> = vec![0; length];
+            reader.read_exact(&mut body).unwrap();
+            d.body = body.clone();
+        }
+    }
+
+    return Ok(d);
 }
 
 enum HttpStatus {
     Ok,
     NotFound,
-    InternalServerError
+    InternalServerError,
 }
 
 impl HttpStatus {
@@ -149,40 +166,57 @@ fn handle_stream(args: Args, stream: &TcpStream) {
         let file_path = req.url_parts[2..].to_vec();
         let mut path: PathBuf = [args.directory.unwrap_or(".".to_string())].iter().collect();
         path.extend(file_path.iter().map(|v| v.as_str()));
-    
+
         println!("{}", path.as_os_str().to_str().unwrap());
-        match std::fs::read_to_string(path) {
-            Ok(data) => {
-                let mut resp = Response {
-                    body: data,
-                    status: HttpStatus::Ok,
-                    headers: HashMap::new(),
-                };
-                resp.add_content_headers("application/octet-stream");
-                _ = resp.write(stream).unwrap();
-            },
-            Err(err) => {
-                if err.kind() == std::io::ErrorKind::NotFound {
+        if req.method == "GET" {
+            match std::fs::read_to_string(path) {
+                Ok(data) => {
                     let mut resp = Response {
-                        body: "Not Found".to_string(),
-                        status: HttpStatus::NotFound,
+                        body: data,
+                        status: HttpStatus::Ok,
                         headers: HashMap::new(),
                     };
-                    resp.add_content_headers("text/plain");
+                    resp.add_content_headers("application/octet-stream");
                     _ = resp.write(stream).unwrap();
                 }
-                else {
-                    let mut resp = Response {
-                        body: "Internal Server Error".to_string(),
-                        status: HttpStatus::InternalServerError,
-                        headers: HashMap::new(),
-                    };
-                    resp.add_content_headers("text/plain");
-                    _ = resp.write(stream).unwrap();
+                Err(err) => {
+                    if err.kind() == std::io::ErrorKind::NotFound {
+                        let mut resp = Response {
+                            body: "Not Found".to_string(),
+                            status: HttpStatus::NotFound,
+                            headers: HashMap::new(),
+                        };
+                        resp.add_content_headers("text/plain");
+                        _ = resp.write(stream).unwrap();
+                    } else {
+                        let mut resp = Response {
+                            body: "Internal Server Error".to_string(),
+                            status: HttpStatus::InternalServerError,
+                            headers: HashMap::new(),
+                        };
+                        resp.add_content_headers("text/plain");
+                        _ = resp.write(stream).unwrap();
+                    }
                 }
             }
+        } else if req.method == "POST" {
+            fs::write(path, req.body).unwrap_or_else(|_| {
+                let mut resp = Response {
+                    body: "Internal Server Error".to_string(),
+                    status: HttpStatus::InternalServerError,
+                    headers: HashMap::new(),
+                };
+                resp.add_content_headers("text/plain");
+                _ = resp.write(stream).unwrap();
+            });
+            let mut resp = Response {
+                body: "ok".to_string(),
+                status: HttpStatus::Ok,
+                headers: HashMap::new(),
+            };
+            resp.add_content_headers("text/plain");
+            _ = resp.write(stream).unwrap();
         }
-       
     } else {
         let mut resp = Response {
             body: "Not Found".to_string(),
