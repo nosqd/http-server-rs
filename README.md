@@ -1,7 +1,4 @@
-# my-own-http-server
+# http-server-rs
+This project builds a simple HTTP server in Rust, inspired by the CodeCrafters course "Build Your Own HTTP Server."
 
-> Okay, I hate Rust.
-
-Or no, no I love it. And I get from hate to love through the codecrafters course `Build your own http server`.
-
-TBD
+I hated rust but now i love it. Okay.
