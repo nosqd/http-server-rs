@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::{
     io::{self, BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
@@ -9,8 +10,9 @@ use itertools::Itertools;
 struct Request {
     full_url: String,
     url_parts: Vec<String>,
+    headers: HashMap<String, String>,
     method: String,
-    http_version: String
+    http_version: String,
 }
 
 fn read_request(stream: &TcpStream) -> io::Result<Request> {
@@ -24,7 +26,7 @@ fn read_request(stream: &TcpStream) -> io::Result<Request> {
     let url_parts = Vec::from_iter(url.split("/"));
     let http_version = into_part_parts.get(2).unwrap().trim_end();
 
-    let mut headers: Vec<(String, String)> = vec![];
+    let mut headers: HashMap<String, String> = HashMap::new();
 
     loop {
         let mut header = String::new();
@@ -33,10 +35,10 @@ fn read_request(stream: &TcpStream) -> io::Result<Request> {
             break;
         }
         let header_parts = Vec::from_iter(header.split(": "));
-        headers.push((
+        headers.insert(
             header_parts[0].trim_end().into(),
             header_parts[1].trim_end().into(),
-        ));
+        );
     }
 
     // todo parse post bodies
@@ -45,21 +47,21 @@ fn read_request(stream: &TcpStream) -> io::Result<Request> {
         full_url: url.to_string(),
         http_version: http_version.to_string(),
         method: method.to_string(),
-        url_parts: url_parts.iter().map(|s| s.to_string()).collect_vec()
-    })
+        url_parts: url_parts.iter().map(|s| s.to_string()).collect_vec(),
+        headers: headers,
+    });
 }
-
 
 enum HttpStatus {
     Ok,
-    NotFound
+    NotFound,
 }
 
 impl HttpStatus {
     fn as_str(&self) -> &'static str {
         match self {
             HttpStatus::Ok => "200 OK",
-            HttpStatus::NotFound => "404 Not Found"
+            HttpStatus::NotFound => "404 Not Found",
         }
     }
 }
@@ -67,7 +69,7 @@ impl HttpStatus {
 struct Response {
     status: HttpStatus,
     headers: Vec<(String, String)>,
-    body: String
+    body: String,
 }
 
 impl Response {
@@ -109,7 +111,15 @@ fn handle_stream(stream: &TcpStream) {
         let resp = Response {
             body: "Hello, world".to_string(),
             status: HttpStatus::Ok,
-            headers: vec![] 
+            headers: vec![],
+        };
+        _ = resp.write(stream).unwrap();
+    }
+    if req.full_url == "/user-agent" {
+        let resp = Response {
+            body: req.headers.get("User-Agent").unwrap().to_string(),
+            status: HttpStatus::Ok,
+            headers: vec![],
         };
         _ = resp.write(stream).unwrap();
     } else if req.full_url.starts_with("/echo/") {
@@ -119,15 +129,18 @@ fn handle_stream(stream: &TcpStream) {
             status: HttpStatus::Ok,
             headers: vec![
                 ("Content-Type".to_string(), "text/plain".to_string()),
-                ("Content-Length".to_string(), data_to_echo.as_bytes().len().to_string()),
-            ] 
+                (
+                    "Content-Length".to_string(),
+                    data_to_echo.as_bytes().len().to_string(),
+                ),
+            ],
         };
         _ = resp.write(stream).unwrap();
     } else {
         let resp = Response {
             body: "Not Found".to_string(),
             status: HttpStatus::NotFound,
-            headers: vec![] 
+            headers: vec![],
         };
         _ = resp.write(stream).unwrap();
     }
