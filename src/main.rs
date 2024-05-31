@@ -54,7 +54,7 @@ fn read_request(stream: &TcpStream) -> io::Result<Request> {
         body: vec![],
     };
 
-    if headers.contains_key("Content-Type") {
+    if headers.contains_key("Content-Length") {
         let length: usize = headers
             .get("Content-Length")
             .unwrap()
