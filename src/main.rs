@@ -1,5 +1,5 @@
 use std::{
-    io::{self, BufRead, BufReader, Read, Write},
+    io::{self, BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
     vec,
 };
@@ -13,16 +13,16 @@ struct Request {
     http_version: String
 }
 
-fn read_request(mut stream: &TcpStream) -> io::Result<Request> {
+fn read_request(stream: &TcpStream) -> io::Result<Request> {
     let mut reader = BufReader::new(stream.try_clone().unwrap());
 
     let mut info_part = String::new();
     reader.read_line(&mut info_part).unwrap();
     let into_part_parts = Vec::from_iter(info_part.split(" "));
-    let _method = into_part_parts.get(0).unwrap().trim_end();
+    let method = into_part_parts.get(0).unwrap().trim_end();
     let url = into_part_parts.get(1).unwrap().trim_end();
     let url_parts = Vec::from_iter(url.split("/"));
-    let _http_version = into_part_parts.get(2).unwrap().trim_end();
+    let http_version = into_part_parts.get(2).unwrap().trim_end();
 
     let mut headers: Vec<(String, String)> = vec![];
 
@@ -43,8 +43,8 @@ fn read_request(mut stream: &TcpStream) -> io::Result<Request> {
 
     return Ok(Request {
         full_url: url.to_string(),
-        http_version: _http_version.to_string(),
-        method: _method.to_string(),
+        http_version: http_version.to_string(),
+        method: method.to_string(),
         url_parts: url_parts.iter().map(|s| s.to_string()).collect_vec()
     })
 }
@@ -102,7 +102,7 @@ impl Response {
     }
 }
 
-fn handle_stream(mut stream: &TcpStream) {
+fn handle_stream(stream: &TcpStream) {
     let req = read_request(stream).unwrap();
 
     if req.full_url == "/" {
@@ -114,7 +114,6 @@ fn handle_stream(mut stream: &TcpStream) {
         _ = resp.write(stream).unwrap();
     } else if req.full_url.starts_with("/echo/") {
         let data_to_echo = req.url_parts.get(2).unwrap();
-        println!("{}", data_to_echo);
         let resp = Response {
             body: data_to_echo.to_string(),
             status: HttpStatus::Ok,
