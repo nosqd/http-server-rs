@@ -56,6 +56,7 @@ fn read_request(stream: &TcpStream) -> io::Result<Request> {
 enum HttpStatus {
     Ok,
     NotFound,
+    InternalServerError
 }
 
 impl HttpStatus {
@@ -63,6 +64,7 @@ impl HttpStatus {
         match self {
             HttpStatus::Ok => "200 OK",
             HttpStatus::NotFound => "404 Not Found",
+            HttpStatus::InternalServerError => "500 Internal Server Error",
         }
     }
 }
@@ -149,13 +151,38 @@ fn handle_stream(args: Args, stream: &TcpStream) {
         path.extend(file_path.iter().map(|v| v.as_str()));
     
         println!("{}", path.as_os_str().to_str().unwrap());
-        let mut resp = Response {
-            body: std::fs::read_to_string(path).unwrap(),
-            status: HttpStatus::Ok,
-            headers: HashMap::new(),
-        };
-        resp.add_content_headers("application/octet-stream");
-        _ = resp.write(stream).unwrap();
+        match std::fs::read_to_string(path) {
+            Ok(data) => {
+                let mut resp = Response {
+                    body: data,
+                    status: HttpStatus::Ok,
+                    headers: HashMap::new(),
+                };
+                resp.add_content_headers("application/octet-stream");
+                _ = resp.write(stream).unwrap();
+            },
+            Err(err) => {
+                if err.kind() == std::io::ErrorKind::NotFound {
+                    let mut resp = Response {
+                        body: "Not Found".to_string(),
+                        status: HttpStatus::NotFound,
+                        headers: HashMap::new(),
+                    };
+                    resp.add_content_headers("text/plain");
+                    _ = resp.write(stream).unwrap();
+                }
+                else {
+                    let mut resp = Response {
+                        body: "Internal Server Error".to_string(),
+                        status: HttpStatus::InternalServerError,
+                        headers: HashMap::new(),
+                    };
+                    resp.add_content_headers("text/plain");
+                    _ = resp.write(stream).unwrap();
+                }
+            }
+        }
+       
     } else {
         let mut resp = Response {
             body: "Not Found".to_string(),
